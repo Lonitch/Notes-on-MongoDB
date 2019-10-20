@@ -1,0 +1,1311 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Do not alter this block (unless you're familiar with LaTeX
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry} 
+\geometry{left=1.0cm, top=3.0 cm, right=1.2cm, bottom=1.2 cm, footskip=.5cm}
+\usepackage{amsmath,amsthm,amssymb,amsfonts, fancyhdr, color, comment, graphicx, environ}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage[shortlabels]{enumitem}
+\usepackage{indentfirst}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=blue,
+}
+
+\usepackage{xcolor}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily,
+  showstringspaces=false,
+  commentstyle=\color{red},
+  keywordstyle=\color{blue}
+}
+ 
+\definecolor{commentext}{RGB}{0, 0, 102}
+\definecolor{score}{RGB}{153, 0, 0}
+
+
+\pagestyle{fancy}
+
+\newenvironment{que}
+    { \begin{mdframed}[backgroundcolor=green!20] \textbf{$\Delta$ Question} \\}
+    {  \end{mdframed}}
+
+\definecolor{bluekeywords}{rgb}{0.13,0.13,1}
+\definecolor{greencomments}{rgb}{0,0.5,0}
+\definecolor{turqusnumbers}{rgb}{0.17,0.57,0.69}
+\definecolor{redstrings}{rgb}{0.5,0,0}
+
+\lstdefinelanguage{bash}
+    {morekeywords={let,insertOne,insertMany, update, replace, updateOne, updateMany, toArray,gt,lt,lte,gte, findOne,find,deleteOne, deleteMany,db, show, use, mongod, mongo, import, as, public, class, void, static, echo, new, match, with, rec, open, module, namespace, type, of, member, and, for, in, do, begin, end, fun, function, try, mutable, if, then, else, elemMatch,const, size},
+    keywordstyle=\color{bluekeywords},
+    sensitive=false,
+    morecomment=[l][\color{greencomments}]{///},
+    morecomment=[l][\color{greencomments}]{//},
+    morecomment=[s][\color{greencomments}]{{(*}{*)}},
+    morestring=[b]",
+    stringstyle=\color{redstrings}
+    }
+
+\lstnewenvironment{code}
+  {
+    \lstset{
+        language=bash,
+        basicstyle=\ttfamily,
+        breaklines=true,
+        columns=fullflexible,
+        backgroundcolor = \color{orange!10}}
+  }
+  {
+  }
+    
+
+
+\renewcommand{\qed}{\quad\qedsymbol}
+
+% prevent line break in inline mode
+\binoppenalty=\maxdimen
+\relpenalty=\maxdimen
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Fill in the appropriate information below
+\lhead{Notes on MongoDB}
+\rhead{ Sizhe Liu} 
+\chead{}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\section{Basic CRUD Operation}
+\begin{que}
+How to get MongoDB running?
+\end{que}
+\noindent
+In first command window
+\begin{code}
+mongod
+\end{code}
+or
+\begin{code}
+mongod --dbpath "/path/to/db/"
+\end{code}
+We can also run mongodb using a customized port by
+\begin{code}
+mongod --port xxxxx
+\end{code}
+Then open another command window
+\begin{code}
+mongo --port xxxxx
+\end{code}
+Now, use "cls" to clear the screen.
+\begin{que}
+How to check the occupied space of the data?
+\end{que}
+\begin{code}
+show dbs
+\end{code}
+\begin{que}
+How to create a new database?
+\end{que}
+\begin{code}
+use xxxx
+\end{code}
+where the "xxxx" is your database name.
+\begin{que}
+How to create a collection of your db and insert one entry?
+\end{que}
+\begin{code}
+db.collectionname.insertOne({xxxxxxx})
+\end{code}
+where "xxxx" is the content of the inserted entry.
+\begin{que}
+A sample JSON file?
+\end{que}
+\begin{code}
+[
+  {
+    "departureAirport": "MUC",
+    "arrivalAirport": "SFO",
+    "aircraft": "Airbus A380",
+    "distance": 12000,
+    "intercontinental": true
+  },
+  {
+    "departureAirport": "LHR",
+    "arrivalAirport": "TXL",
+    "aircraft": "Airbus A320",
+    "distance": 950,
+    "intercontinental": false
+  }
+]
+\end{code}
+\begin{que}
+How to show all entries elegantly?
+\end{que}
+\begin{code}
+db.collectionname.find().pretty()
+\end{code}
+\begin{que}
+Do we have to use the same schema in the same collection?
+\end{que}
+No. That is one big difference between noSQL and SQL.
+\begin{que}
+How to add object id manually in JSON file?
+\end{que}
+\begin{code}
+{
+"name1": val1,
+"name2": val2,
+"_id":xxxxxxx}
+\end{code}
+\begin{que}
+Overview of CRUD operations?
+\end{que}
+\begin{code}
+//Create
+insertOne(data,options)
+insertMany(data,options)
+//Read
+find(filter,options)
+findOne(filter,options)
+//Update
+updateOne(filter,data,options)
+updateMany(filter, data, options)
+replaceOne(filter,data,options)
+//Delete
+deleteOne(filter,options)
+deleteMany(filter,options)
+\end{code}
+\begin{que}
+How to delete one documents using a filter?
+\end{que}
+\begin{code}
+db.collectionname.deleteOne({key:val})
+\end{code}
+\begin{que}
+How to delete many documents using a filter?
+\end{que}
+If the docs do not have common keys, we need to add a common key for the files we want to delete, using update commands
+\begin{code}
+db.collectionname.updateOne({distance: 12000}, {$set: {marker: "delete"}})
+db.collectionname.updateMany({}, {$set: {marker: "delete"}})
+\end{code}
+where "\$set" is the fixed command to setup a new key in the fist file found with key of "distance" equal to 12000.
+
+The second command is to create new field "marker" in all the files.
+\begin{que}
+How to add many documents using an array?
+\end{que}
+\begin{code}
+db.collectionname.insertMany([{xxxxxx},{xxxxxx}])
+\end{code}
+\begin{que}
+How to find many file use filter?
+\end{que}
+\begin{code}
+db.collectionname.find({key1:{$gt: xxxxxx}})
+\end{code}
+where "\$gt: xxxxxx" stands for "value of key1 that is greater than xxxxxx."
+\begin{que}
+How to use update, updateOne, and updateMany?
+\end{que}
+\begin{code}
+db.collectionname.update({"_id":123456}, {delayed:true})
+\end{code}
+This code will replace the entry with id of "123456" with \{delayed:true\}. Similar to the following command:
+\begin{code}
+db.collectionname.replace({"_id":123456}, {delayed:true})
+\end{code}
+For "updateOne", if we want to set a new field in the curly bracket, we can do the following
+\begin{code}
+db.collectionname.updateOne({"_id":123456}, {$set delayed:true})
+\end{code}
+Similar rule applies to "updateMany"
+\begin{que}
+What 'find()' gives you?
+\end{que}
+It gives you a "cursor", you can fetch all the entries by using:
+\begin{code}
+db.collectionname.find().toArray()
+\end{code}
+Unlike "find()", "findOne()" does not gives a "cursor". Thus, using "pretty()" with "findOne()" will cause error.
+\begin{que}
+What is projection and how to use it?
+\end{que}
+Projection is a way to fine tune the data you want to fetch from your database. It creates flags to filter the information in each entry that you want or you do not need. Here is an example:
+
+\begin{code}
+db.passengers.find({},{name: 1, _id:0})
+{"name":1xxxx}
+{"name":2xxxx}
+{"name":3xxxx}
+\end{code}
+The code above does not apply any inter-entry filter as the first argument in "find()" is "\{\}". The second argument further filter the info inside each entry by allowing "name" of each entry to show and filtering "\_id"
+\begin{que}
+What is embedded document?
+\end{que}
+An embedded document is the json documents nested inside their parent documents. Using the following code, we can update the "status" using an embedded documents:
+\begin{code}
+db.collectionname.updateMany({},{$set:{"status":{description:"UAA", lastUpdated:"2 hours ago"}}})
+\end{code}
+where the embedded doc is:
+\begin{code}
+{description:"UAA", lastUpdated:"2 hours ago"}
+\end{code}
+
+\begin{que}
+How to fetch an entry if one of its property is an array?
+\end{que}
+Just use one of the element value in that array. Let's say the property which has an array-like value is "hobbies", we can fetch all the entry which has a hobby of "sports" by:
+\begin{code}
+db.collectionname.find({hobbies:"sports"})
+\end{code}
+\begin{que}
+How to fetch an entry if one of its property is an embedded doc?
+\end{que}
+Use "" to wrap the property name. Such name has a format of "xxxx.xxxx.xxxx". \textbf{The number of "." indicates layers of nested embedded docs}. The following example has an embedded doc named as "status", with one of its sub property, "details" as another doc. We can find an entry by doing:
+\begin{code}
+db.collectionname.find({"status.details.xxxx":"xxxx"})
+\end{code}
+\begin{que}
+How to reset your database/collection?
+\end{que}
+\begin{code}
+use databaseName
+db.dropDatabase()
+\end{code}
+Similarly, for collection
+\begin{code}
+db.mycollection.drop()
+\end{code}
+
+
+\subsection{Solution to Some Tasks}
+We have an array of patients data in a form of:
+\begin{code}
+{
+"firstName":"xxx",
+"lastName":"xxx",
+"age":29,
+"history":[
+{"disease":"cold","treatment":"xxxx"},
+{...}
+]
+}
+\end{code}
+Now we two entries in the collection "patients"
+\begin{code}
+db.patients.insertMany([
+{
+"firstName":"Mat",
+"lastName":"McTracy",
+"age":49,
+"history":[
+{"disease":"cold","treatment":"pills"},
+{"disease":"PTSD","treatment":"in-house"}
+]
+},
+{
+"firstName":"Dan",
+"lastName":"Schroski",
+"age":29,
+"history":[
+{"disease":"cold","treatment":"N/A"}
+]
+}
+])
+\end{code}
+Update patient data of 1 patient with new age, name and history entry:
+\begin{code}
+db.patients.updateOne({"lastName":"Schroski"}, {$set:{"age":55},{"firstName": Frank},{"history":["disease":"cough","treatment":"cough drop"]}})
+\end{code}
+Find all patients who are older than or equal to 30
+\begin{code}
+db.patients.find({"age":{$gte: 30}}).pretty()
+\end{code}
+Delete all patients who got a cold as a disease
+\begin{code}
+db.patients.deleteMany({"history.disease":"cold"})
+\end{code}
+\newpage
+\section{Data Schemas \& Data Modeling}
+\subsection{Data types}
+\begin{code}
+Text-->"MMM"
+Boolean-->true
+NumberInt(int32)-->NumberInt(55) 
+NumberLong(int64)-->NumberLong(7489729384792)
+NumberDecimal-->NumberDecimal("12.99")
+ObjectID-->ObjectID("xx5637")
+ISODate-->ISODate("2019-09-20")
+Embedded Doc-->{"a":{...}}
+Array-->{"b":[...]}
+\end{code}
+\begin{que}
+how to drop the whole database?
+\end{que}
+\begin{code}
+use dbname
+db.dropDatabase()
+\end{code}
+\begin{que}
+How to drop a collection?
+\end{que}
+\begin{code}
+db.collectionname.drop()
+\end{code}
+\begin{que}
+How to check the statistics of your DB?
+\end{que}
+\begin{code}
+db.stats()
+\end{code}
+\begin{que}
+Why do we use data type to define values? like the following code?
+\end{que}
+\begin{code}
+db.numbers.insertOne({a:NumberInt(1)})
+\end{code}
+It returns smaller data size (33 vs. 29).
+\begin{que}
+How to check the type of a value?
+\end{que}
+\begin{code}
+typeof db.collectionname.findOne().keyname
+\end{code}
+\begin{que}
+Important hard limits of mongoDB?
+\end{que}
+A single document in a collection (including all embedded documents it might have) must be <= 16mb. Additionally, you may only have 100 levels of embedded documents.
+
+\subsection{Relations}
+\begin{que}
+What are the options for database relations
+\end{que}
+Embedded doc:
+\begin{code}
+{
+user:"Lil",
+age: 29,
+address:{city:'NYC',st:'5th ave'}
+}
+\end{code}
+References
+\begin{code}
+In User collection:
+{
+user:'Lil'
+favBooks:['id1','id2']
+}
+In Book collection:
+{
+_id:'id1',
+name: 'Vallery Poetry'
+}
+\end{code}
+\begin{que}
+How to build a many-to-many relation with embedded doc?
+\end{que}
+Use customer-order database as an example: each customer might buy different products, and each product might be bought my different customers.
+\begin{code}
+use shop
+db.products.insertMany([{_id:"idnum1",title:"Book",price:12.99}, {_id:"idnum2", title:"T-shirt",price:25.66}])
+db.customers.insertOne({name:"Bronn", age:35})
+//Now we update order info for the customer
+db.customers.updateOne({name:"Bronn"},{$set:{orders:[{productid:"idnum1", quantity:2},{productid:"idnum2", quantity:3}]}})
+\end{code}
+\begin{que}
+How to build a many-to-many relation with reference?
+\end{que}
+We can use books-authors database as an example
+\begin{code}
+use bookEntry
+db.books.insertOne({title:"F--Book", author:["author1", "author2"]})
+db.authors.insertMany([
+{_id:"author1", name:"Max"},
+{_id:"author2",name:"Selina"}
+])
+\end{code}
+\begin{que}
+How to lookup to merge two collections?
+\end{que}
+Again, use book-author collections as an example
+\begin{code}
+db.books.aggregate([{$lookup:{from:"authors",localField:"authors", foreignField:"_id", as:"creators"}}])
+\end{code}
+The code above merges "books" collection with "authors" collection. It says: merging the books collection \textbf{from} authors. The matching keys between these collections are "authors" in "books"(localField) and "\_id" in "authors"(foreignField). The merged data will store in the field named as "creators".
+\begin{que}
+Build a simple user-post-comment database.
+\end{que}
+\begin{code}
+use blog
+db.users.insertMany([
+{_id:"z3id",name:"z3", age:18, email:"z3@126.com"},
+{_id:"l4id",name:"l4", age:29, email:"l4@gmail.com"}
+])
+db.posts.insertOne({
+title:"xxxx",
+text:"fefjkhfdghkjkdf kferkg sfjhdnkjg",
+tag:["new","tech"],
+creator:"z3id",
+comments:[{text:"yoyo", author:"l4id"}]
+})
+\end{code}
+\subsection{Schema validation}
+\begin{que}
+How to setup validation for collection schema?
+\end{que}
+We can use "createCollection" command and "validator" keyword:
+\begin{code}
+db.createCollection("collectionname",{
+  validator: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['title', 'text', 'creator', 'comments'],
+      properties: {
+        title: {
+          bsonType: 'string',
+          description: 'must be a string and is required'
+        },
+        text: {
+          bsonType: 'string',
+          description: 'must be a string and is required'
+        },
+        creator: {
+          bsonType: 'objectId',
+          description: 'must be an objectid and is required'
+        },
+        comments: {
+          bsonType: 'array',
+          description: 'must be an array and is required',
+          items: {
+            bsonType: 'object',
+            required: ['text', 'author'],
+            properties: {
+              text: {
+                bsonType: 'string',
+                description: 'must be a string and is required'
+              },
+              author: {
+                bsonType: 'objectId',
+                description: 'must be an objectid and is required'
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+});
+\end{code}
+\begin{que}
+How to change your validation action?
+\end{que}
+\begin{code}
+db.runCommand({
+  collMod: 'collectionname',
+  validator: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: ['title', 'text', 'creator', 'comments'],
+      properties: {
+        title: {
+          bsonType: 'string',
+          description: 'must be a string and is required'
+        },
+        text: {
+          bsonType: 'string',
+          description: 'must be a string and is required'
+        },
+        creator: {
+          bsonType: 'objectId',
+          description: 'must be an objectid and is required'
+        },
+        comments: {
+          bsonType: 'array',
+          description: 'must be an array and is required',
+          items: {
+            bsonType: 'object',
+            required: ['text', 'author'],
+            properties: {
+              text: {
+                bsonType: 'string',
+                description: 'must be a string and is required'
+              },
+              author: {
+                bsonType: 'objectId',
+                description: 'must be an objectid and is required'
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  validationAction: 'warn'
+});
+\end{code}
+Now the validation action is changed to "warn". So new entry without following the schema will still be added in the database, but a warning will be written in the log file.
+\begin{que}
+Things to consider when you structure your database?
+\end{que}
+\begin{code}
+//In which Format will you fetch your data
+//How often will you fetch and change your data
+//How much data will save 
+//How is your data related
+//Will duplicates hurt you(==>many updates)
+//Will you hit Data/storage limits
+\end{code}
+\begin{que}
+How to run mongodb as a background service?
+\end{que}
+\begin{code}
+//In linux
+mongod --fork --logpath /path/to/log/folder
+//In windows
+net start MongoDB
+\end{code}
+With MongoDB running at the background, system info about starting a DB will be written in the log folder.
+\begin{que}
+How to shut down mongodb as a background service?
+\end{que}
+\begin{code}
+//In linux
+db.shutdownServer()
+//In Windows, open cmd as admin and
+net stop MongoDB
+\end{code}
+\begin{que}
+How to start mongodb using a config file?
+\end{que}
+\begin{code}
+mongod -f /path/to/your/config.cfg
+\end{code}
+\newpage
+\section{Create}
+\begin{que}
+what could happen if you use insertMany to insert a doc that is already existing in your db?
+\end{que}
+\begin{code}
+//The docs before the repeated entry will still be added. A error will be printed out.
+\end{code}
+\begin{que}
+How to change the behavior shown above?
+\end{que}
+Use "ordered", and set it to "false". Then all the new entries will be inserted except for the repeated one.
+\begin{code}
+db.collection.insertMany([{_id:"xxx",xx:XXXX},{_id:"xx2",xx:XXXX},{_id:"xx3",xx:XXXX}],{ordered:false})
+\end{code}
+\subsection{WriteConcern}
+Use "WriteConcert" to interact your create commands with the Journal of your database. A journal is a "Todo" list for your database.
+\begin{que}
+Give an example of using writeConcern in your command.
+\end{que}
+\begin{code}
+db.collection.insertOne({xxx:"fef","fefef":55},{writeConcern:{w:1, j:true}})
+\end{code}
+"w:1" option above simply indicates that "I need to be sure that the server is acknowledge my writing. And I need to wait till the server is ready to write the data." You can set {w:0}, but you will not know if the server will generate relevant info for that entry, and the command will be finished faster.
+\begin{code}
+//j:true
+//will make sure the command above is recorded in the journal first and will be finished later when the resource is available.
+\end{code}
+\subsection{Atomicity}
+For atomic writing command (insertOne, updateOne), MongoDB makes sure that each file is rolled back as a whole or is written as a whole.
+\subsection{Importing data}
+To import a data file, first go to the location where the data file resides, and open a command prompt to do the following command:
+\begin{code}
+mongoimport xxxx.json -d databaseName -c collectionName --jsonArray --drop
+\end{code}
+The "--jsonArray" indicates that the content of the file is an array. "--drop" drops the existing collection if the collection with the same name is already created. Without it, MongoDB appends the data to the collection.
+\newpage
+\section{Read}
+First, let's check the names of databases that are already created:
+\begin{code}
+db.adminCommand({listDatabases:1, nameOnly:1})
+\end{code}
+\begin{que}
+Some query keywords to remember?
+\end{que}
+\begin{code}
+$gt//greater than
+$gte//greater or equal
+$lt//less than
+$lte//less or equal
+$ne//not equal
+$
+\end{code}
+\begin{que}
+How to search the embedded doc?
+\end{que}
+\begin{code}
+db.collection.find({"key.embeddedkey":{xxx:xxxx}})
+\end{code}
+\begin{que}
+How to search elements in an array?
+\end{que}
+\begin{code}
+//search entries contain element "qq" in the field of "k"
+db.collection.find({k:"qq"})
+//search entries only have "qq" in the field of "k"
+db.collection.find({k:["qq"]})
+\end{code}
+\begin{que}
+How to search entries with field "kk" equals to 43 or 55?
+\end{que}
+\begin{code}
+db.collection.find({kk:{$in:[43,55]})
+\end{code}
+\begin{que}
+How to search entries with field "kk" not equals to 43 or 55?
+\end{que}
+\begin{code}
+db.collection.find({kk:{$nin:[43,55]})
+\end{code}
+\subsection{Logic operator}
+\begin{que}
+How to find entries that have field "kk"$>$90 or $<$30?
+\end{que}
+\begin{code}
+db.collection.find({$or:[{"kk":{$gt:90}}, {"kk":{$lt:30}}]})
+\end{code}
+\begin{que}
+How to count the number of entries you obtained?
+\end{que}
+\begin{code}
+db.collection.find().count()
+\end{code}
+\begin{que}
+Why it is important to use \$and in query?
+\end{que}
+Because if not, the following two queries will give same results:
+\begin{code}
+db.collection.find({kk:"123k",kk:"2345k"})
+db.collection.find({kk:"2345k"})
+\end{code}
+The first filter in the first command is overwritten by the second filter. If we use \$and, we can apply multiple filters on the same field:
+\begin{code}
+db.collection.find({$and:[{kk:"123k"},{kk:"2345k"}]})
+\end{code}
+\begin{que}
+How to use \$not in the query?
+\end{que}
+\begin{code}
+db.collection.find({kk:{$not:{$eq:60}}})
+\end{code}
+The command above gives the entries whose "kk" field is not equal to 60.
+
+\subsection{Element operators}
+\begin{que}
+How to find entries which do not have field of "kk"?
+\end{que}
+The command below finds entries with "age" field existing and its value is not equal to null.
+\begin{code}
+db.collection.find({age: {$exist: true, $ne:null}})
+\end{code}
+\begin{que}
+How to use \$type to get entries with field having a sepcific kind of data?
+\end{que}
+The following code find entries with the type of "phone" is "double" or "string".
+\begin{code}
+db.collection.find({phone:{$type:["double", "string"]}})
+\end{code}
+
+\subsection{Evaluation operator}
+\begin{que}
+How to find entries with the field "summary" having string "musical" in it?
+\end{que}
+We can use \$regex
+\begin{code}
+db.collection.find({summary:{$regex:"/musical/"}})
+\end{code}
+\begin{que}
+How to find entries using \$expr?
+\end{que}
+\begin{code}
+//Here we use expression to compare the field of "volume" and "target"
+//The following code adds a condition on the value for "volume", where the value is subtracted by 30 if its original value is >=190, and then, the new value was used to compare
+//Only the entries where the updated "volume" value is larger than the "target" are returned.
+db.collection.find({$expr:{$gt:[{$cond: {if:{$gte:["$volume",190]}, then:{$substract:["$volume",30]},else:"$volume"}},"$target"]}})
+\end{code}
+To refer field in entries, we need to use dollar sign. For example, "\$volume".
+
+\subsection{Array query selectors}
+\begin{que}
+How to make a query for an array of embedded doc?
+\end{que}
+\begin{code}
+//Use dot reference. For example, if one of your field looks like the following:
+"hobbies":[{"title":xxx,"freq":88},{"title":"fedf","freq":8}]
+//You can refer to the "title" field by:
+"hobbies.title"
+\end{code}
+\begin{que}
+Give an example of using \$size
+\end{que}
+\begin{code}
+//Find entries with the "ff" field having a length equal to 3
+db.collection.find({"ff":{$size:3}}).pretty()
+\end{code}
+\begin{que}
+Give an example of using \$all
+\end{que}
+\begin{code}
+//Return movies with genres of "action" and "thriller". The sequence of these two words does not matter
+db.movies.find({genres:{$all:["action","thriller"]}})
+\end{code}
+\begin{que}
+Give an example of using \$elemMatch
+\end{que}
+\begin{code}
+//Use the following code to return entries where "hobbies" is an array, and each elements must satisfy the two conditions:
+//title is "Sports", and freq is >=3
+
+//Using \$and won't work here because it only applies to the whole array
+db.collection.find({hobbies:{$elemMatch:{title:"Sports", freq:{$gte:3}}}})
+\end{code}
+
+\subsection{Cursors and Filtering}
+\begin{que}
+Spit out the next document
+\end{que}
+\begin{code}
+db.collection.find().next()
+//Or through defining a cursor
+var dataCursor = db.collection.find()
+dataCursor.next()
+\end{code}
+We can use "hasNext()" function to check if there is next element left in a cursor.
+\begin{que}
+How to sort the fetched results?
+\end{que}
+Using "sort" function where "-1" is descending and "1" is ascending.
+\begin{code}
+db.collection.find().sort({"ddd":-1,"dfe":1}).pretty()
+\end{code}
+\begin{que}
+What is "skip()" and "limit()" for?
+\end{que}
+"skip(x)" skips the first x results, and "limit(x)" returns x results.
+\begin{que}
+How to use projection with arrays?
+\end{que}
+\begin{code}
+//The following command returns entries that may or may not have "Horror" in "genres" field but must have "Drama" genre.
+db.movies.find({genres:"Drama"},{genres:{$elemMatch:{$eq:"horror"}}})
+\end{code}
+\begin{que}
+How to use projection with \$slice?
+\end{que}
+\begin{code}
+//The following code will return the entries where the rating is >9, and their first two genre tags and names are shown.
+db.movies.find({ratings:{$gt:9$}}, {genres:{$slice:2}, name:1})
+//The following code skip the first genre tag and show the next two tags
+db.movies.find({rating:{$gt:9}},{genre:{$slice:[1,2]},name:1}})
+\end{code}
+
+\subsection{Solutions to some exercise}
+\begin{que}
+Search all movies that have a avg rating higher than 9.2 and a runtime lower than 100 minutes
+\end{que}
+\begin{code}
+db.movies.find({$and:[{"rating.average":{$gt:9.2}},{runtime:100}]})
+//Or we can use the following one
+db.movies.find({{"rating.average":{$gt:9.2}},{runtime:100}})
+\end{code}
+\begin{que}
+Search all movies that have a genre of "drama" or "action"
+\end{que}
+\begin{code}
+db.movies.find({$or:[{genres:"drama"},{genres:"action"}]})
+\end{code}
+\begin{que}
+Search all movies where visitors exceeded expectedVisitors
+\end{que}
+\begin{code}
+db.movies.find({$expr:{$gt:["$expectedVisitors","$visitors"]}})
+\end{code}
+\begin{que}
+Find all movies with exactly two genres
+\end{que}
+\begin{code}
+db.movies.find({genre:{$size:2}}).pretty()
+\end{code}
+\begin{que}
+Find all movies which aired in 2018
+\end{que}
+\begin{code}
+db.movies.find({"meta.aired":2018})
+\end{code}
+\begin{que}
+Find all the movies with ratings higher than 8 and lower than 10.
+\end{que}
+\begin{code}
+//Ratings is an array, we need to use $elemMatch
+db.movies.find({ratings:{$elemMatch:{$gt:8,$lt:10}}}).pretty()
+\end{code}
+
+\newpage
+\section{Update}
+\begin{que}
+How to use \$set to set multiple field?
+\end{que}
+\begin{code}
+//Use the following example
+db.collection.updataMany({last_name:"Liu"}, {$set:{age:40, need:$}})
+\end{code}
+\begin{que}
+How to increment or decrement a number ?
+\end{que}
+\begin{code}
+db.collection.updateOne({name:"Manuel"}, {$inc:{age:-1}})
+db.collection.updateOne({name:"Manuel"}, {$inc:{age:5}})
+\end{code}
+\begin{que}
+How to use \$min and \$max?
+\end{que}
+\begin{code}
+//$min lower a value to a specific value or doing nothing if the value is already smaller than the intended value
+db.collection.updateOne({name:"Sandy"},{$min:{age:35}})
+//$max raises a value to a specific value or doing nothing if the value is already larger than the intended value
+db.collection.updateOne({name:"Sandy"},{$max:{age:35}})
+//$mul multiply a number to current value 
+db.collection.updateOne({name:"Sandy"},{$mul:{age:1.1}})
+\end{code}
+\begin{que}
+How to drop/rename a field
+\end{que}
+\begin{code}
+db.collection.updateMany({name:"Liu"},{$unset:{age:""}})
+db.collection.updateMany({name:"Liu"},{$rename:{age:"nowold"}})
+\end{code}
+\begin{que}
+How to create a doc if it does not exist?
+\end{que}
+Use "upsert" to append doc if no file is found
+\begin{code}
+db.collection.updateOne({name:"Louis"},{$set:{age:55}},{upsert:true})
+\end{code}
+\begin{que}
+How to update one element in an array ?
+\end{que}
+\begin{code}
+//First use $elemMatch to find the element, then use ".$" to update
+db.collection.updateMany({hobbies:{$elemMatch:{freq:3, time:100}},{$set:{"hobbies.$":{title:999,freq:999,time:999}}})
+//we can even set a new field for that element,haha
+db.collection.updateMany({hobbies:{$elemMatch:{freq:3, time:100}},{$set:{"hobbies.$.haha":1})
+\end{code}
+\begin{que}
+How to update many elements in an array ?
+\end{que}
+\begin{code}
+//reduce values in field of "frequency" by 1 for all the doc in the hobbies array
+db.collection.updateMany({"hobbies.frequency":{$gt:30}},{$inc:{"hobbies.$[].frequency":-1}})
+//notice that the elements with frequence smaller 30 still get update, the following one only update the elements with frequency>30
+db.collection.updateMany({"hobbies.frequency":{$gt:30}},{$inc:{"hobbies.$[el].frequency":-1}},{arrayFilters:[{"el.frequency":{$gt:30}}]})
+//Here we define an identifier "el" by using arrayFilters, the condition setup in the arrayFilters is the same as the first argument, but it can be different.
+\end{code}
+\begin{que}
+How to add/drop elements from an array?
+\end{que}
+\begin{code}
+//use push to add one element
+db.collection.updateOne({name:"Yiggritte"}, {$push:{hobbies:{title:"squash",frequency:5}}})
+//use addToSet to only add if the entry is unique
+db.collection.updateOne({name:"Yiggritte"}, {$addToSet:{hobbies:{title:"squash",frequency:5}}})
+
+//use push to add many
+db.collection.updateOne({name:"Yiggritte"}, {$push:{hobbies:{$each:[{title:"squash",frequency:5},{title:"badminton",frequency:7}], $sort:{frequency:-1},$slice:1}}).
+//here we sort insertion candidates by frequency in descending manner and only push the one with highest frequency
+
+//Use pull to drop elements
+db.collection.updateOne({name:"LL"},{$pull:{hobbies:{title:"hiking"}}})
+//code above drops element in hobbies array with title of "hiking".
+//we can use pop to drop last or first element
+db.collection.updateOne({name:"LL"},{$pop:{hobbies:-1}})//first
+db.collection.updateOne({name:"LL"},{$pop:{hobbies:1}})//last
+\end{code}
+
+\newpage
+\section{Delete}
+\begin{que}
+How to use deleteOne and deleteMany?
+\end{que}
+\begin{code}
+db.collection.deleteOne({name:"LL"})
+db.collection.deleteMany({totalAge:{$exist:false},isSporty:true})
+\end{code}
+\begin{que}
+How to drop an entire collection?
+\end{que}
+\begin{code}
+db.collection.drop()
+\end{code}
+
+\newpage
+\section{Indexes}
+\begin{que}
+How to add index for single field?
+\end{que}
+\begin{code}
+//First check the strategy mongoDB was using to find contacts that are older than 60
+db.contacts.explain().find({"dob.age":{$gt:60}})
+//we then find the stretegy mongoDB was using is "COLLSCAN"(i.e., full scan)
+"winningPlan" : {
+                    "stage" : "COLLSCAN",
+                    "filter" : {
+                            "dob.age" : {
+                                    "$gt" : 60
+                            }
+                    },
+                    "direction" : "forward"
+            }
+//Now, create index for the field "dob.age" in contacts collection using ascending sequence
+db.contacts.createIndex({"dob.age":1}
+//index can be dropped
+db.contacts.dropIndex({"dob.age":1})
+
+//Note: an index can only be helpful if the expected return is not huge in size (almost around the same size as the while database) 
+\end{code}
+\begin{que}
+How to create compound index?
+\end{que}
+\begin{code}
+//Here we create index for age and gender of the contacts collection
+db.contacts.createIndex({"dob.age":1, gender:1})
+//If you have the following command
+db.contacts.createIndex({"dob.age":1, gender:1, postcode:1, nat:1})
+//make sure you always use first N filters. If only the second or the third is used, than the index won't be used.
+\end{code}
+\begin{que}
+How to use index for sorting?
+\end{que}
+\begin{code}
+//The command would be the same. just faster as no memory might be needed to do the sorting
+db.contacts.find({"dob.age":{$gt:60}}).sort({gender:1})
+\end{code}
+\begin{que}
+How to get indexed info?
+\end{que}
+\begin{code}
+db.contacts.getIndexes()
+\end{code}
+
+\begin{que}
+How to get configure index?
+\end{que}
+\begin{code}
+//Set it as unique values
+db.contacts.createIndex({xxx:1},{unique:true})
+//The command above will fail if the key itself is not unique.
+
+//Now we use partial filter to narrow down the search results if that filter is used in the find function
+db.contacts.createIndex({xxx:1},{unique:true, partialFilterExpression:{gender:"male"}})
+//Compare to compund index, partial filter has bigger size, and faster for the combination you sepecified.
+
+//Now, if the field used to create index might not universal for all the doc, we can also use partial filter to apply index only to docs with that field:
+db.contacts.createIndex({email:1},{unique:true, partialFilterExpression:{email:{$exists:true}}})
+\end{code}
+\begin{que}
+Time-to-live(TTL) index?
+\end{que}
+TTL is used for self-destroy data.
+\begin{code}
+//Let's create some entries of date first
+db.sessions.insertOne({name:"q1", createdAt:new Date()})
+db.sessions.insertOne({name:"q2", createdAt:new Date()})
+//now, we make these entries self-destroyed after 10 seconds
+db.sessions.createIndex({createdAt:1},{expireAfterSeconds:10})
+
+\begin{que}
+Query diagnosis \& query planning?
+\end{que}
+\begin{code}
+//show winning plan
+db.collection.explain("queryPlanner").find(...)
+//show execution stats+possible rejected plans
+db.collection.explain("executionStats").find(...)
+//show stats+wining plan decision rocess
+db.collection.explain("allPlansExecution").find(...)
+\end{code}
+\begin{que}
+Why use multi-key index?
+\end{que}
+\begin{code}
+//If the value of a field is an array, we need to use multi-key to speed up the code
+db.collection.createIndex({"xxxx.xxx":1})
+//Array keys cannot be used to build compound index.
+\end{code}
+\begin{que}
+How to use "text" index
+\end{que}
+\begin{code}
+//If you have keys with their values are pure text, you can create index based on the text as:
+db.collection.createIndex({description:"text"})
+//Later, you can search on these text as:
+db.collection.find({$text:{$search:"xxxx aaaa"}})
+//the command above will find all the entries with descriptions containing xxxx and aaaa, but not "xxxx aaaa". In order to find entries where the description contains "xxxx aaaa" exactly, we use:
+db.collection.find({$text:{$search:"\"xxxx aaaa\""})
+
+//We can, of course, create combined text index
+db.collection.createIndex({key1:"text",key2:"text"})
+\end{code}
+\begin{que}
+How to sort results obtained based on text index?
+\end{que}
+\begin{code}
+//Use score option to arrange results based on number of filters each result satisfies
+db.collection.find({$text:{$search:"awesone pants"}},{score:{$meta:"textScore"}})
+//typically, the command above gives sorted results, but we can also add sort() like:
+db.collection.find({$text:{$search:"awesone pants"}},{score:{$meta:"textScore"}}).sort({score:{$meta:"textScore"}})
+\end{code}
+\begin{que}
+Exclude words using text index?
+\end{que}
+\begin{code}
+//Exclude T-shirt in the string
+db.collection.find({$text:{$search:"xxxx -t-shirt"})
+\end{code}
+\begin{que}
+Use weight in text index?
+\end{que}
+\begin{code}
+db.collection.createIndex({key1:"text",key2:"text"},{default_language:"chinese",weights:{key1:10,key2:1}})
+\end{code}
+
+\begin{que}
+Why and How of background Indexd
+\end{que}
+\begin{code}
+//background index does not lock the collection when it is created. Thus, it takes less time update when new entry is inserted into the collection
+db.collection.createIndex({key:1},{background:true})
+\end{code}
+
+\newpage
+\section{Geospatial Queries}
+\begin{que}
+An example of GeoJSON object?
+\end{que}
+\begin{code}
+{
+  type : "Polygon",
+  coordinates : [
+     [ [ 0 , 0 ] , [ 3 , 6 ] , [ 6 , 1 ] , [ 0 , 0 ] ],
+     [ [ 2 , 2 ] , [ 3 , 3 ] , [ 4 , 2 ] , [ 2 , 2 ] ]
+  ]
+}
+//Key words for GeoJSON type: "Point", "LineString", "Polygon","MultiPoint","MultiLineString","MultiPolygon"
+//The following command create an entry by using geospatial data
+db.collection.insertOne({name:"MIT", location:{type:"Point",coordinates:[-122.3443443, 33.9876489]}})
+\end{code}
+
+\begin{que}
+How to create Geospatial index to track the distance
+\end{que}
+\begin{code}
+//First, create Index as
+db.collection.createIndex({location:"2dsphere"})
+//Than, find the location near the point of (-122.3, 77.6)
+db.collection.find({location:{$near:{$geometry:{type:"Point", coordinates:[-122.3, 77.6]}}}})
+//Set distance range
+db.collection.find({location:{$near:{$geometry:{type:"Point", coordinates:[-122.3, 77.6]},$maxDistance:500,$minDistance:10}}})
+\end{code}
+\begin{que}
+How to find places inside a certain area
+\end{que}
+\begin{code}
+//First we define a polygon
+const p1=[122,77]
+const p2=[133,99]
+const p3=[123,99]
+const p4=[122,88]
+//Find the places in DB that are within the polygon
+db.collection.find({location:{$geoWithin:{$geometry:{type:"Polygon", coordinates:[p1,p2,p3,p4]}}})
+//We can also save this area and check if a point is inside the area
+db.collection.insertOne({name:"region1", area:{type:"Polygon", coordinates:[p1,p2,p3,p4]}})
+//Now, reate index
+db.collection.createIndex({area:"2dsphere"})
+//check which polygon contains the point (122,45)
+db.collection.find({area:{$geoIntersects:{$geometry:{type:"Point", coordinates:[122,45]}}}})
+\end{code}
+\begin{que}
+find places within a certain radius
+\end{que}
+\begin{code}
+//find places within 100 miles from -122,33
+db.collection.find({location:{$geoWithin:{$centerSphere:[[-122, 33], 100/3963.2]}}})
+//find places within 100 kms from -122,33
+db.collection.find({location:{$geoWithin:{$centerSphere:[[-122, 33], 100/6378.1]}}})
+\end{code}
+
+\newpage
+\section{Aggregation Framework}
+\subsection{Fundamentals}
+\begin{que}
+What is pipeliens?
+\end{que}
+Pipelines are a composition of stages. Stages are configurable to produce desired transformations. Documents flow through stages like parts in an assembly line or water through a pipe. Finally, with only a few exceptions which we'll cover later, stages can be arranged in any way we like and as many as we require. 
+\begin{code}
+//think of as a conveyor belt in a factory. Along the line, we have three stages:
+//$match: find specific entries
+//$project: transform data you found
+//$group: combine them into a single file (result)
+\end{code}
+\begin{que}
+What aggregation structure might look like?
+\end{que}
+\begin{code}
+db.collection.aggregate([{stage 1}, {stage 2}, {...stage N}], {options})
+
+//Now, an example of an aggregation:
+db.solarSystem.aggregate([{//pipline is a list of stages
+    $match:{
+        atmosphericComposition:{$in:[/02/]},
+        meanTemperature:{$gte:-40,$lte:40}
+        },{
+        $project: {
+        _id:0, 
+        name:1,
+        hasMoons:{$gt:["$numberOfMoons",0]}
+        }
+        }], {allowDiskUsr:true}
+)
+\end{code}
+\begin{que}
+some important syntax?
+\end{que}
+\begin{code}
+//Field Path:
+"$fieldName"
+//System Variable:
+"$$UPPERCASE"
+//Usert variable
+"$$lowercase"
+\end{code}
+
+\begin{que}
+What the \$project do?
+\end{que}
+\begin{code}
+//It bahave like the map function in programming language like Python while it still has basic projection functionality.
+//The following command reassin the value in gravity.value to a new field, surfacegravity:
+db.collection.aggregation({$project:{_id:0,name:1,surfacegravity:"$gravity.value"})
+//The following command shows my weight on different planets
+db.colllection.aggregation({$project:{_id:0,name:1,myweight:{$multiply:[{$divide:["$gravity.value",9.8]},70]}})
+\end{code}
+\begin{que}
+Using expression in project?
+\end{que}
+\begin{code}
+//It's just like normal query. The following command calculates approx. radius for each planet
+db.collection.aggregation({$project:{_id:0,name:1,radius:{$floor:{$add:["$radius.value",0.5]}}}})
+//We can also use :
+db.collection.aggregation({$project:{_id:0,name:1,radius:{$floor:{$add:["$$CURRENT.radius.value",0.5]}}}})
+\end{code}
+\begin{que}
+Give an example of building pipeline in pymongo?
+\end{que}
+\begin{code}
+import pymongo
+course_cluster_uri = "mongodb://agg-student:agg-password@cluster0-shard-00-00-jxeqq.mongodb.net:27017,cluster0-shard-00-01-jxeqq.mongodb.net:27017,cluster0-shard-00-02-jxeqq.mongodb.net:27017/test?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin"
+course_client = pymongo.MongoClient(course_cluster_uri)
+movies = course_client['aggregations']['movies']
+
+counting = {
+    "$count": "one_word_titles"
+}
+shaping = {
+"$project":{
+        "title":1,
+        "spltil":{"$size":{"$split":["$title"," "]}}
+    }
+}
+matching = {
+    "$match":{"spltil":{"$eq":1}}
+}
+pipeline = [
+    shaping,
+    matching,
+    counting
+]
+
+display(list(movies.aggregate(pipeline)))
+//Note here that we can have multiple stages for "match", "project"
+//Make sure each stage follows the format of {key1:{expr1},key2:{expr2}}
+\end{code}
+
+
+
+\newpage
+\section{Numeric Data}
+\begin{que}
+How to defina a value as integer?
+\end{que}
+\begin{code}
+db.collection,insertOne({age:NumberInt(29)})//int32
+db.collection,insertOne({code:NumberLong(2243564908)})//int64
+db.collection,insertOne({code:NumberDecimal(22435.64908)})//decimal 128
+\end{code}
+\begin{que}
+How to do math with int32/int64/float?
+\end{que}
+\begin{code}
+//make sure you declare the number type before using $inc,$mul etc.
+db.collection.updateOne({}, {$inc:{amount:NumberLong("234")}})
+\end{code}
+
+\newpage
+\section{Security}
+\begin{que}
+How to create and editing users?
+\end{que}
+\begin{code}
+//First, start your DB with auto option
+mongod --auth
+//Now, go to MongoDB shell and create an user as:
+db.createUder({user:"Liu", pwd:"fesf", roles:["userAdminAnyDatabase"]})
+//Now, use this new user to go to your db
+db.auth('Liu','fesf')
+//Remember, the users must be attached to a database.
+//You can also create an user for multiple database
+db.createUser({user:"dev", pwd:"ddd", roles:[{role:"readWrite",db:"customers"},{role:"readWriter",db:"shop"}]})
+\end{code}
+\begin{que}
+Built-in roles?
+\end{que}
+\begin{code}
+//user:
+"read","readWrite"
+//admin
+"dvAdmin","userAdmin","dbOwner"
+//All database roles
+"readAnyDatabase","readWriteAnyDatabase","userAdminAnyDatabase","dbAdminAnyDatabase"
+//superuser
+"dbOwner","userAdmin","userAdminDatabase", "root"
+\end{code}
+\begin{que}
+how to use user/pwd pair to login a db?
+\end{que}
+\begin{code}
+//instead using db.auth, we can use
+mongo -u Liu -p fesf --authenticationDatabase dbName
+\end{code}
+\begin{que}
+How to update user so that it can edit another DB?
+\end{que}
+\begin{code}
+//First go to a DB
+use shope
+//then, make sure your user can edit the collection named "blog" in "shop" db
+db.updateUser("userName",{roles:["readWrite",{role:"readWrite",db:"blog"}]})
+//Afterwards, make sure you log out the user and re-login to "shop" db. Because the user might be attached to another db
+mongo -u userName -p xxxxx --autheticationDatabase shop
+\end{code}
+
+
+
+
+\end{document}
