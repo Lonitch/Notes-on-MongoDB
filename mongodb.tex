@@ -15,7 +15,8 @@
     filecolor=magenta,      
     urlcolor=blue,
 }
-
+\usepackage{float}
+\usepackage{tikz}
 \usepackage{xcolor}
 \usepackage{listings}
 \lstset{basicstyle=\ttfamily,
@@ -63,9 +64,13 @@
   }
     
 
-
+\newcommand{\redp}[1]{\textcolor{red}{#1}}
+\newcommand{\bluep}[1]{\textcolor{blue}{#1}}
 \renewcommand{\qed}{\quad\qedsymbol}
 
+\usepackage{titling}
+\renewcommand\maketitlehooka{\null\mbox{}\vfill}
+\renewcommand\maketitlehookd{\vfill\null}
 % prevent line break in inline mode
 \binoppenalty=\maxdimen
 \relpenalty=\maxdimen
@@ -75,10 +80,18 @@
 \lhead{Notes on MongoDB}
 \rhead{ Sizhe Liu} 
 \chead{}
+\title{Notes on MongoDB}
+\author{Sizhe Liu}
+\date{Version 1.0}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{document}
-
+\begin{titlingpage}
+\maketitle
+\end{titlingpage}
+\newpage
+\tableofcontents
+\newpage
 \section{Basic CRUD Operation}
 \begin{que}
 How to get MongoDB running?
@@ -1236,8 +1249,424 @@ display(list(movies.aggregate(pipeline)))
 //Note here that we can have multiple stages for "match", "project"
 //Make sure each stage follows the format of {key1:{expr1},key2:{expr2}}
 \end{code}
+\begin{que}
+What is \$match in the command above
+\end{que}
+\begin{code}
+//It acts like a find query
+\end{code}
+\begin{que}
+What's the advantage of using sort early in the pipeline?
 
+How to speed up your sort functionality?
+\end{que}
+\begin{code}
+//we can take advantage of using indexes later in the pipeline
+//use {allowDiskUse:true} in your pipeline in order to use more than 100MB memory
+\end{code}
+\begin{que}
+What is \$group stage?
+\end{que}
+\begin{code}
+//It just like the "GROUP BY" in SQL but much more flexible
+\end{code}
+\begin{que}
+How to use \$group to calculate an average over the whole/part of database?
+\end{que}
+\begin{code}
+//The command below calculates the average of the field "metacritic" and renamed the results as "avgMeta"
+db.collection.aggregation([
+{$match:{"metacritic":{$gte:0}},
+{$group:{_id:null,avgMeta:{$avg:"$metacritic"}}}
+])
+//Notice that "null" is used for _id to make sure the calculation is over the whole database.
 
+//The command below group the data by the year:
+db.collection.aggregation([
+{$match:{"metacritic":{$gte:0}},
+{$group:{_id:"$year",avgMeta:{$avg:"$metacritic"}}}
+])
+\end{code}
+\begin{que}
+How to count how many files are in each group?
+\end{que}
+\begin{code}
+db.collection.aggregation([
+{$group:{_id:"$year",count:{$sum:1}}}
+])
+\end{code}
+
+\begin{que}
+What you will get when you use accumulator function in \$project
+\end{que}
+\begin{code}
+//accumulator function will work with the array within each file, so you will get a result for each file.
+\end{code}
+
+\begin{que}
+Give an example of using \$reduce and accumulator functions
+\end{que}
+\begin{code}
+//The following calculate the maximum of "avg_high_tmp"
+db.collection.aggregation({
+    $project:{
+                _id:0, 
+                max_temp:{
+                $reduce:{
+                    input:"$trends",
+                    initialValue:-Infinity,
+                    $cond:[{$gt:["$$this.avg_high_tmp","$$value"]},
+                            "$$this.avg_high_tmp",//if avg_high_tmp>Value, return avg_high_tmp
+                            "$$value"//else, return the value.
+                          ]
+                }
+            }
+        })
+//Notice that the $$value has an initialValue is set to be -Infinity
+//$$variable are temporary for this query only.
+\end{code}
+A much easier way to do the same thing is to use \$max:
+\begin{code}
+db.collection.aggregation([{$project:{_id:0, max_temp:{$max:"$trends.avg_high_tmp"}}}])
+\end{code}
+
+\begin{que}
+What are the available accumulator functions?
+\end{que}
+\begin{code}
+$max,$min,$avg,$stdDevPop//standard deviation over whole dataset
+$stdDevSamp//standard deviation over sampled subset.
+\end{code}
+
+\begin{que}
+What is \$unwind stage and why is it useful?
+\end{que}
+\begin{code}
+//we use the following entry as an example
+{
+    "name":"book",
+    "genre":["fiction","advanture"]
+
+}
+//After unwind, we have two entries:
+{
+    "name":"book",
+    "genre":"fiction"
+
+}
+{
+    "name":"book",
+    "genre":"advanture"
+
+}
+//Unwind stage is useful when we use array-like field as one of the conditions in group stage. For example:
+{"genre":["advanture","fiction"]} 
+{"genre":["fiction","advanture"]}
+//are not equivalent, if we use group stage directly on this field. However, with unwind, we might be able to work around such condtion.
+
+//to unwind the field above, we can do the following:
+{"$unwind":"$genre"}
+\end{code}
+\begin{que}
+How to use unwind with group? give an example.
+\end{que}
+\begin{code}
+//Let's use our increasing understanding of the Aggregation Framework to explore our movies collection in more detail. We'd like to calculate how many movies every cast member has been in, and get an average imdb.rating for each cast member. Which cast member has the been in the most movies with English as an available language?
+predicate = {
+    "$match":{"languages":"English"}
+}
+unwinding = {//Use detailed unwind is important here!!!
+    "$unwind":{"path":"$cast","includeArrayIndex": "arrayIndex","preserveNullAndEmptyArrays": False }
+}
+grouping = {
+    "$group":{
+        "_id":"$cast",
+        "numFilms":{"$sum":1},
+        "average":{"$avg":"$imdb.rating"}
+    }
+}
+sorting = {
+    "$sort":{"numFilms":-1}
+}
+limiting = {
+    "$limit":5
+}
+pipeline = [
+    predicate,
+    unwinding,
+    grouping,
+    #shaping,
+    sorting,
+    limiting
+]
+display(list(movies.aggregate(pipeline)))
+//The command above gives the following result:
+[{'_id': 'John Wayne', 'numFilms': 107, 'average': 6.424299065420561},
+ {'_id': 'Michael Caine', 'numFilms': 83, 'average': 6.506024096385542},
+ {'_id': 'Christopher Lee', 'numFilms': 76, 'average': 6.132894736842106},
+ {'_id': 'Robert De Niro', 'numFilms': 75, 'average': 6.690140845070423},
+ {'_id': 'Bette Davis', 'numFilms': 68, 'average': 7.310294117647059}]
+\end{code}
+
+\begin{que}
+What is \$lookup stage
+\end{que}
+\begin{code}
+//It is effectively "LEFT JOIN" in SQL, it has the following structure
+{
+   $lookup:
+     {
+       from: <collection to join in current database>,
+       localField: <field from current collection>,
+       foreignField: <field from the documents of the "from" collection>,
+       as: <output array field>//any string can be used, if the string already exists in current collection, it will be overwritten.
+     }
+}
+//Notice that the lookup will retrive the whole document once it finds a matched entry.
+\end{code}
+
+\begin{que}
+Give an example of using \$lookup?
+\end{que}
+\begin{code}
+//An entry in air_routes looks like:
+{"_id":{"$oid":"56e9b39b732b6122f877fa31"},"airline":{"id":410,"name":"Aerocondor","alias":"2B","iata":"ARD"},"src_airport":"CEK","dst_airport":"KZN","codeshare":"","stops":0,"airplane":"CR2"}
+//An entry in air_alliances looks like:
+{"name": "Star Alliance",
+    "airlines":["Air Canada",
+      "Adria Airways",
+      "Avianca",
+      "Scandinavian Airlines",
+      "All Nippon Airways",
+      "Brussels Airlines",
+      "Shenzhen Airlines",
+      "Air China",
+      "Air New Zealand",
+      "Asiana Airlines",
+      "Brussels Airlines",
+      "Copa Airlines",
+      "Croatia Airlines",
+      "EgyptAir",
+      "TAP Portugal",
+      "United Airlines",
+      "Turkish Airlines",
+      "Swiss International Air Lines",
+      "Lufthansa",
+      "EVA Air",
+      "South African Airways",
+      "Singapore Airlines"
+      ]}
+//Which alliance from air_alliances flies the most routes with either a Boeing 747 or an Airbus A380 (abbreviated 747 and 380 in air_routes)?
+predicate = {
+  "$match": {
+      "airplane": {"$regex": "747|380"}
+  }
+}
+lookup = {
+    "$lookup":{
+        "from":"air_alliances",
+        "localField":"airline.name",
+        "foreignField":"airlines",
+        "as":"alliance"
+    }
+}
+unwinding = {
+    "$unwind":{"path":"$alliance.name", "includeArrayIndex": "arrayIndex","preserveNullAndEmptyArrays": True}
+}
+grouping = {
+    "$group":{
+            "_id":"$alliance.name",
+             "count":{"$sum":1}
+             }
+}
+sorting = {
+    "$sort":{"count":-1}
+}
+pipeline = [
+    predicate,
+    lookup,
+    unwinding,
+    grouping,
+    sorting
+]
+display(list(routes.aggregate(pipeline)))
+//The commands above give:
+[{'_id': [], 'count': 51},
+ {'_id': ['SkyTeam'], 'count': 16},
+ {'_id': ['Star Alliance'], 'count': 11},
+ {'_id': ['OneWorld'], 'count': 11}]
+\end{code}
+
+\begin{que}
+Give an example of using \$graphlookup?
+\end{que}
+\begin{code}
+//Here we are trying to find the connection between the actor "Woody Harrelson" and the director "Steven Spielberg". Now, we build stages one by one:
+//1. Find all the movies made by Steven, and only get the directors data
+{
+        "$match": {
+            "directors": "Steven Spielberg"
+        }
+    },
+    {
+        "$project": {
+            "directors": 1
+        }
+    },
+//2. Treat each director as a node on a graph, trasverse over the graph by using graphlookup:
+graph_lookup = {
+    "$graphLookup": {
+        "from":"movies",
+        "startWith": "$directors",
+        "connectFromField": "directors",
+        "connectToField": "directors",
+        "maxDepth":6,
+        "depthField": "network_level",
+        "as":"network"
+    }
+}
+//Now, each movie entry has a new field called "network", within which is a linked list starting from that movie, and each node on the list has its depth value(from 1 to 6).
+//3. Next, we unwind the network and only save the information of graph depth and cast lists that might or might not contain "Woody Harrelson".
+{
+        "$unwind": "$network"
+    },
+    {
+        "$project": {
+            "cast": "$network.cast",
+            "level": "$network.network_level"
+        }
+    },
+//4. group by the levels on the graph, combine the cast lists of all the nodes with identical network_levels.
+    {
+        "$group": {
+            "_id": "$level",
+            "cast": {"$addToSet": "$cast"}
+        }
+    },
+//5. because the resulted combined cast list is a 2d array, we can transform it into 1d array by using \$reduce:
+project_cast = {
+    "$project": {
+        "cast":{"$reduce":{
+            "input":"$cast",
+            "initialValue":[""],
+            "in":{"$concatArrays":["$$value", "$$this"] }
+                    }
+               }
+    }
+}
+//6. Finally, find the cast lists with "Woody Harrelson" in it, and order their network_level ascendingly
+{
+        "$match": {
+            "cast": "Woody Harrelson"
+        }
+    },
+    {
+        "$sort": {
+            "_id": 1
+        }
+     },
+    {
+        "$project": {
+            "_id": 0,
+            "answer": "$_id"
+        }
+    },
+    {
+        "$limit": 1
+    }
+//This pipeline gives the following results:
+[{'answer': 2}]
+//meaning Woody is 2 person away from Steven.
+\end{code}
+
+\subsection{Import data using CSV}
+MongoDB cluster/\textcolor{red}{command line tools} is used here.
+\begin{code}
+//First go to your cluster on ATLAS, click the "..." button to find command line tools, copy the following command
+mongoimport --host hostName --ssl --username xxxx --password xxxxx --authenticationDatabase admin --db databasename --collection collectionName --type CSV --file xxxx.csv 
+
+//If you have header line in your csc file, add --headerline to specify the names for all the fields.
+
+//After the data is imported to your cluster on ATLAS, connect your ATLAS cluster with MongoDB compass by clicking your cluster, and hit the connect button to copy the connect command string for compass.
+
+//Now, open your compass, and it will automatically detect the string and autofill the field for connection.
+
+//Type your password, and then click the connect button.
+\end{code}
+\begin{que}
+How to force data type for each column of your raw data?
+\end{que}
+\begin{code}
+//Go to your raw data, add header name with data type, for example
+columnName.string()
+columnName.int32()
+columnName.decimal()
+//One special case is the date format, you need to provide an example date in order to get it working. In this case, the example must be "Mon Jan 2 15:04:05 MST 2006"
+
+//Let's say your date format is smt like "12/1/10 8:26", then your header should be:
+columnName.date(1/2/06 15:04)
+
+//Now we need to add --columnsHaveTypes at the end of the mongoimport command
+\end{code}
+
+\begin{que}
+How to drop, insert to, or merge to current data from imported data?
+\end{que}
+\begin{code}
+//use --drop to delete existing data
+//use --mode=insert to insert to
+//use --mode=upsert to overwrite or insert entries, with upsert, we can specify which field to replace by using --upsertFields=fieldName,fieldName2
+//use --mode=merge means to replace only the fields of the new data that we're importing and keep other fields the same.
+\end{code}
+
+\subsection{On Schema}
+\begin{que}
+Why have a shcema
+\end{que}
+$$
+\begin{array}{l}{\circ \quad \sim \text { If you don't have a schema, look harder- }} \\ {\circ \quad \text { Because you want to group similar things together }} \\ {\circ \quad \text { Identify common characteristics through aggregation }}\end{array}
+$$
+\begin{que}
+What does a schema consist of?
+\end{que}
+$$
+\begin{array}{l}{\circ \text { In relational databases you start with the data and its relationships }} \\ {\circ \text { in MongoDB, schema begins with data access patterns }} \\ {\qquad \begin{array}{ll}{\text { Performance focused }}\end{array}}\end{array}
+$$
+\begin{que}
+What are the entity relationship
+\end{que}
+\begin{code}
+//1 to N relation
+//N to N relation
+\end{code}
+
+\begin{que}
+What is the flexibility of schema validation?
+\end{que}
+Schema Validation
+
+$\circ$ You can insert documents without defining any validation!
+
+$\circ$ You can define a validation and only insert those types!
+
+\noindent
+\textcolor{red}{A few words on developing a schema:}
+$$
+\begin{array}{l}{\circ \text { MongoDB supports very strict and very loose schemas }} \\ {\circ \text { ldentify important queries to support (access patterns) }} \\ {\circ \text { After considering queries, then consider relationships }} \\ {\text { (opposite of relational schema design) }} \\ {\circ \text { Schemas change over time! }}\end{array}
+$$
+\begin{que}
+How to migrate your schema specified by a pipeline?
+\end{que}
+\begin{code}
+//Use "$out":"collectionName" at the end of your pipeline.
+\end{code}
+
+\begin{que}
+What is view and its features?
+\end{que}
+$$
+\begin{array}{l}{\cdot \text { Views contain no data themselves. They are created on demand and reflect the data in the source }} \\ {\text { collection }} \\ {\text { Views are read only. Write operations to views will error }} \\ {\text { Views have some restrictions. They must abide by the rules of the Aggregation Framework, and }} \\ {\text { cannot contain find() projection operators }} \\ {\text { Horizontal sicing is performed with the Smatch stage, reducing the number of documents that are }} \\ {\text { returned. }} \\ {\text { Vertical slicing is performed with a Sproject or other shaping stage, modifying individual documents. }}\end{array}
+$$
 
 \newpage
 \section{Numeric Data}
@@ -1256,6 +1685,7 @@ How to do math with int32/int64/float?
 //make sure you declare the number type before using $inc,$mul etc.
 db.collection.updateOne({}, {$inc:{amount:NumberLong("234")}})
 \end{code}
+
 
 \newpage
 \section{Security}
@@ -1304,8 +1734,195 @@ db.updateUser("userName",{roles:["readWrite",{role:"readWrite",db:"blog"}]})
 //Afterwards, make sure you log out the user and re-login to "shop" db. Because the user might be attached to another db
 mongo -u userName -p xxxxx --autheticationDatabase shop
 \end{code}
+\section{MongoDB with Machine Learning}
+\subsection{Using MongoDB to Do Associative Role Learning}
+\subsubsection{Terminology}
+$$
+\begin{array}{c}{\bullet \text { Relationship Terms }} \\ {\circ \text { Antecedent }} \\ {\circ \text { Consequent }} \\ {\bullet \text { Characteristic Terms }} \\ {\circ \text { Support }} \\ {\circ \text { Confidence }} \\ {\circ \text { Lift }}\end{array}
+$$
 
+First,If we have the following relationships between two items/variables:
+$$
+\begin{array}{c}{\text { A implies } \mathrm{B}} \\ {\qquad \mathrm{A} \Rightarrow \mathrm{B}} \\ { \text { Chips } \Rightarrow \text { Beer }} \end{array}
+$$
+where we use chips/beer as an example (i.e., the purchase of beer implies the purchase of chips). Then \redp{Chips is the \textbf{Antecedent}, and the beer is \textbf{Consequent}}.
 
+\redp{Support }is defined as:\bluep{
+$$
+\begin{array}{l}{\text { Support(A) }=} \\ {\text { Transactions where A appears / Total Transactions }}\end{array}
+$$
+}
+
+In a associative role analysis, if we have multiple items/variables, \redp{the support has to be calculated for all possible combinations}. For example, if we have a list of items/variables: $\{A, B, C\}$, we need to calculate the support of $\{A\}, \{B\},\{C\},\{A,B\},\{A,C\},\{B,C\}$, that is:$$
+\mathbb{P}\{A\cap B\},\mathbb{P}\{A\cap C\},\mathbb{P}\{C\cap B\},\mathbb{P}\{A\},\mathbb{P}\{ B\},\mathbb{P}\{C\}$$
+
+\redp{Confidence} is defined as the likelihood (possibility) of item B to be bought with item A:\bluep{
+$$
+\begin{array}{l}{\text { Confidence }(\mathrm{A} \Rightarrow \mathrm{B})=} \\ {\text { Support([A } \cap \text { B]) } / \text { Support([A]) }}\end{array}
+$$}
+
+\redp{Lift} is defined as how likely item B is purchased when A is purchased.\bluep{Unlike confidence, lift take into account the popularity of item A:
+$$
+\begin{array}{l}{ \text { Confidence(A }\Rightarrow \mathrm{B})=} \\ {\text { Support([A } \cup \text { B] } /( \text { Support([A]) " Support(IB))) } }\end{array}
+$$
+}
+
+A general rule for the value of lift is:
+\begin{itemize}
+    \item $lift>1$, positive association; 
+    \item $lift=1$, no association;
+    \item $lift<1$, negative association;
+\end{itemize}
+\subsubsection{Titanic data for association rule (in Python)}
+
+\subsection{Principal Component Analysis (PCA) with MongoDB}
+\begin{figure}[H]
+
+\tikzset{every picture/.style={line width=0.75pt}} %set default line width to 0.75pt        
+
+\begin{tikzpicture}[x=0.75pt,y=0.75pt,yscale=-1,xscale=1]
+%uncomment if require: \path (0,300); %set diagram left start at 0, and has height of 300
+
+%Shape: Axis 2D [id:dp513056563992349] 
+\draw [line width=1.5]  (10.2,209.4) -- (248.2,209.4)(50.2,53.4) -- (50.2,254.4) (241.2,204.4) -- (248.2,209.4) -- (241.2,214.4) (45.2,60.4) -- (50.2,53.4) -- (55.2,60.4)  ;
+%Shape: Circle [id:dp39139579143071457] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (125.67,112.1) .. controls (125.66,110.12) and (127.26,108.49) .. (129.24,108.48) .. controls (131.23,108.46) and (132.86,110.06) .. (132.87,112.05) .. controls (132.89,114.04) and (131.29,115.66) .. (129.3,115.68) .. controls (127.31,115.69) and (125.69,114.09) .. (125.67,112.1) -- cycle ;
+%Shape: Circle [id:dp5964526393130858] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (145.82,131.95) .. controls (145.81,129.96) and (147.41,128.34) .. (149.4,128.32) .. controls (151.39,128.31) and (153.01,129.91) .. (153.02,131.89) .. controls (153.04,133.88) and (151.44,135.51) .. (149.45,135.52) .. controls (147.46,135.54) and (145.84,133.94) .. (145.82,131.95) -- cycle ;
+%Shape: Circle [id:dp7202841048170294] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (111.89,141.21) .. controls (111.88,139.22) and (113.48,137.6) .. (115.47,137.58) .. controls (117.46,137.57) and (119.08,139.17) .. (119.09,141.16) .. controls (119.11,143.14) and (117.51,144.77) .. (115.52,144.78) .. controls (113.53,144.8) and (111.91,143.2) .. (111.89,141.21) -- cycle ;
+%Shape: Circle [id:dp25368233336361956] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (151.92,144.9) .. controls (151.91,142.91) and (153.51,141.29) .. (155.5,141.28) .. controls (157.48,141.26) and (159.11,142.86) .. (159.12,144.85) .. controls (159.14,146.84) and (157.54,148.46) .. (155.55,148.48) .. controls (153.56,148.49) and (151.94,146.89) .. (151.92,144.9) -- cycle ;
+%Shape: Circle [id:dp36624775491708284] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (165.98,151.8) .. controls (165.96,149.81) and (167.56,148.18) .. (169.55,148.17) .. controls (171.54,148.15) and (173.16,149.75) .. (173.18,151.74) .. controls (173.19,153.73) and (171.59,155.35) .. (169.61,155.37) .. controls (167.62,155.38) and (165.99,153.78) .. (165.98,151.8) -- cycle ;
+%Shape: Circle [id:dp24086559523361406] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (125.98,152.1) .. controls (125.96,150.11) and (127.56,148.49) .. (129.55,148.47) .. controls (131.54,148.46) and (133.16,150.06) .. (133.18,152.05) .. controls (133.19,154.04) and (131.59,155.66) .. (129.61,155.67) .. controls (127.62,155.69) and (125.99,154.09) .. (125.98,152.1) -- cycle ;
+%Shape: Circle [id:dp6892309867608881] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (157.63,106.86) .. controls (157.62,104.87) and (159.22,103.25) .. (161.2,103.23) .. controls (163.19,103.22) and (164.82,104.81) .. (164.83,106.8) .. controls (164.85,108.79) and (163.25,110.42) .. (161.26,110.43) .. controls (159.27,110.45) and (157.65,108.85) .. (157.63,106.86) -- cycle ;
+%Shape: Circle [id:dp051448679983896795] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (189.01,130.22) .. controls (189,128.01) and (187.19,126.23) .. (184.98,126.25) .. controls (182.77,126.27) and (181,128.07) .. (181.01,130.28) .. controls (181.03,132.49) and (182.83,134.27) .. (185.04,134.25) .. controls (187.25,134.23) and (189.03,132.43) .. (189.01,130.22) -- cycle ;
+%Shape: Circle [id:dp40698101213784377] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (185.71,116.64) .. controls (185.69,114.65) and (187.29,113.03) .. (189.28,113.02) .. controls (191.27,113) and (192.89,114.6) .. (192.91,116.59) .. controls (192.92,118.58) and (191.32,120.2) .. (189.34,120.21) .. controls (187.35,120.23) and (185.72,118.63) .. (185.71,116.64) -- cycle ;
+%Shape: Circle [id:dp5090917263138659] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (169.79,126.77) .. controls (169.77,124.78) and (171.37,123.15) .. (173.36,123.14) .. controls (175.35,123.12) and (176.97,124.72) .. (176.99,126.71) .. controls (177,128.7) and (175.4,130.32) .. (173.41,130.34) .. controls (171.42,130.35) and (169.8,128.75) .. (169.79,126.77) -- cycle ;
+%Shape: Circle [id:dp9112465611793558] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (129.83,132.07) .. controls (129.81,130.08) and (131.41,128.46) .. (133.4,128.44) .. controls (135.39,128.43) and (137.01,130.03) .. (137.02,132.02) .. controls (137.04,134.01) and (135.44,135.63) .. (133.45,135.64) .. controls (131.46,135.66) and (129.84,134.06) .. (129.83,132.07) -- cycle ;
+%Shape: Circle [id:dp8517948906300165] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (93.17,151.15) .. controls (93.16,149.17) and (94.75,147.54) .. (96.74,147.53) .. controls (98.73,147.51) and (100.36,149.11) .. (100.37,151.1) .. controls (100.39,153.09) and (98.79,154.71) .. (96.8,154.73) .. controls (94.81,154.74) and (93.19,153.14) .. (93.17,151.15) -- cycle ;
+%Shape: Circle [id:dp5948751823464716] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (113.32,171) .. controls (113.31,169.01) and (114.91,167.39) .. (116.9,167.37) .. controls (118.88,167.36) and (120.51,168.96) .. (120.52,170.94) .. controls (120.54,172.93) and (118.94,174.56) .. (116.95,174.57) .. controls (114.96,174.59) and (113.34,172.99) .. (113.32,171) -- cycle ;
+%Shape: Circle [id:dp04745687814919841] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (143.71,169.17) .. controls (143.7,167.18) and (145.29,165.55) .. (147.28,165.54) .. controls (149.27,165.52) and (150.89,167.12) .. (150.91,169.11) .. controls (150.93,171.1) and (149.33,172.72) .. (147.34,172.74) .. controls (145.35,172.75) and (143.73,171.15) .. (143.71,169.17) -- cycle ;
+%Shape: Circle [id:dp9038560656103009] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (100.98,177.9) .. controls (100.96,175.91) and (102.56,174.28) .. (104.55,174.27) .. controls (106.54,174.25) and (108.16,175.85) .. (108.18,177.84) .. controls (108.19,179.83) and (106.59,181.45) .. (104.6,181.47) .. controls (102.62,181.48) and (100.99,179.88) .. (100.98,177.9) -- cycle ;
+%Shape: Circle [id:dp6341168143683834] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (144.51,117.56) .. controls (144.5,115.57) and (146.1,113.95) .. (148.09,113.93) .. controls (150.07,113.92) and (151.7,115.52) .. (151.71,117.5) .. controls (151.73,119.49) and (150.13,121.12) .. (148.14,121.13) .. controls (146.15,121.15) and (144.53,119.55) .. (144.51,117.56) -- cycle ;
+%Shape: Circle [id:dp17488667747032516] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (174.47,111.33) .. controls (174.45,109.34) and (176.05,107.72) .. (178.04,107.7) .. controls (180.03,107.69) and (181.65,109.29) .. (181.67,111.27) .. controls (181.68,113.26) and (180.08,114.89) .. (178.09,114.9) .. controls (176.11,114.92) and (174.48,113.32) .. (174.47,111.33) -- cycle ;
+%Shape: Circle [id:dp6827705406711813] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (155.23,159.08) .. controls (155.22,157.09) and (156.82,155.47) .. (158.81,155.45) .. controls (160.79,155.44) and (162.42,157.03) .. (162.43,159.02) .. controls (162.45,161.01) and (160.85,162.64) .. (158.86,162.65) .. controls (156.87,162.67) and (155.25,161.07) .. (155.23,159.08) -- cycle ;
+%Shape: Circle [id:dp23730772122696298] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (111.79,127.41) .. controls (111.77,125.42) and (113.37,123.8) .. (115.36,123.78) .. controls (117.35,123.77) and (118.97,125.37) .. (118.99,127.36) .. controls (119,129.34) and (117.4,130.97) .. (115.42,130.98) .. controls (113.43,131) and (111.8,129.4) .. (111.79,127.41) -- cycle ;
+%Shape: Circle [id:dp18384274561650338] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (124.97,176.51) .. controls (124.95,174.52) and (126.55,172.9) .. (128.54,172.88) .. controls (130.53,172.87) and (132.15,174.47) .. (132.17,176.46) .. controls (132.18,178.44) and (130.58,180.07) .. (128.59,180.08) .. controls (126.61,180.1) and (124.98,178.5) .. (124.97,176.51) -- cycle ;
+%Shape: Circle [id:dp7789305416083177] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (189.59,101.21) .. controls (189.57,99.22) and (191.17,97.6) .. (193.16,97.58) .. controls (195.15,97.57) and (196.77,99.17) .. (196.79,101.16) .. controls (196.8,103.15) and (195.21,104.77) .. (193.22,104.78) .. controls (191.23,104.8) and (189.61,103.2) .. (189.59,101.21) -- cycle ;
+%Shape: Circle [id:dp714748134346529] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (96.9,167.53) .. controls (96.88,165.54) and (98.48,163.91) .. (100.47,163.9) .. controls (102.46,163.88) and (104.08,165.48) .. (104.1,167.47) .. controls (104.11,169.46) and (102.51,171.08) .. (100.52,171.1) .. controls (98.54,171.11) and (96.91,169.51) .. (96.9,167.53) -- cycle ;
+%Shape: Circle [id:dp3304811619764084] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (117.05,187.37) .. controls (117.03,185.38) and (118.63,183.76) .. (120.62,183.74) .. controls (122.61,183.73) and (124.23,185.33) .. (124.25,187.32) .. controls (124.26,189.3) and (122.67,190.93) .. (120.68,190.94) .. controls (118.69,190.96) and (117.06,189.36) .. (117.05,187.37) -- cycle ;
+%Shape: Circle [id:dp17569697039639054] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (98.58,191.51) .. controls (98.57,189.53) and (100.16,187.9) .. (102.15,187.89) .. controls (104.14,187.87) and (105.77,189.47) .. (105.78,191.46) .. controls (105.8,193.45) and (104.2,195.07) .. (102.21,195.09) .. controls (100.22,195.1) and (98.6,193.5) .. (98.58,191.51) -- cycle ;
+%Shape: Circle [id:dp8680567304898031] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (83.99,180.13) .. controls (83.98,178.14) and (85.58,176.51) .. (87.57,176.5) .. controls (89.55,176.48) and (91.18,178.08) .. (91.19,180.07) .. controls (91.21,182.06) and (89.61,183.68) .. (87.62,183.7) .. controls (85.63,183.71) and (84.01,182.11) .. (83.99,180.13) -- cycle ;
+%Straight Lines [id:da05344309148218107] 
+\draw [color={rgb, 255:red, 226; green, 24; blue, 24 }  ,draw opacity=1 ][line width=1.5]    (133.18,152.05) -- (190.9,103.12) ;
+\draw [shift={(193.19,101.18)}, rotate = 499.72] [color={rgb, 255:red, 226; green, 24; blue, 24 }  ,draw opacity=1 ][line width=1.5]    (14.21,-4.28) .. controls (9.04,-1.82) and (4.3,-0.39) .. (0,0) .. controls (4.3,0.39) and (9.04,1.82) .. (14.21,4.28)   ;
+
+%Straight Lines [id:da5814390988638019] 
+\draw [color={rgb, 255:red, 231; green, 44; blue, 44 }  ,draw opacity=1 ][line width=1.5]    (129.58,152.07) -- (109.05,125.77) ;
+\draw [shift={(107.2,123.4)}, rotate = 412.03] [color={rgb, 255:red, 231; green, 44; blue, 44 }  ,draw opacity=1 ][line width=1.5]    (14.21,-4.28) .. controls (9.04,-1.82) and (4.3,-0.39) .. (0,0) .. controls (4.3,0.39) and (9.04,1.82) .. (14.21,4.28)   ;
+
+%Shape: Axis 2D [id:dp5616471379145448] 
+\draw [line width=1.5]  (407.2,157.4) -- (611.2,157.4)(519.2,91.4) -- (519.2,227.4) (604.2,152.4) -- (611.2,157.4) -- (604.2,162.4) (514.2,98.4) -- (519.2,91.4) -- (524.2,98.4)  ;
+%Shape: Circle [id:dp3405330856383355] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (527.82,119.28) .. controls (529.03,117.71) and (531.29,117.41) .. (532.86,118.62) .. controls (534.44,119.83) and (534.74,122.09) .. (533.53,123.67) .. controls (532.32,125.24) and (530.06,125.54) .. (528.48,124.33) .. controls (526.91,123.12) and (526.61,120.86) .. (527.82,119.28) -- cycle ;
+%Shape: Circle [id:dp45738335598504887] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (531.52,147.33) .. controls (532.73,145.75) and (534.99,145.45) .. (536.57,146.66) .. controls (538.14,147.87) and (538.44,150.13) .. (537.23,151.71) .. controls (536.02,153.28) and (533.76,153.58) .. (532.18,152.37) .. controls (530.61,151.16) and (530.31,148.9) .. (531.52,147.33) -- cycle ;
+%Shape: Circle [id:dp423105119590761] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (499.06,133.78) .. controls (500.27,132.2) and (502.53,131.9) .. (504.11,133.11) .. controls (505.69,134.32) and (505.98,136.58) .. (504.77,138.16) .. controls (503.56,139.74) and (501.31,140.04) .. (499.73,138.83) .. controls (498.15,137.62) and (497.85,135.36) .. (499.06,133.78) -- cycle ;
+%Shape: Circle [id:dp15310955911827762] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (528.37,161.29) .. controls (529.58,159.72) and (531.84,159.42) .. (533.42,160.63) .. controls (534.99,161.84) and (535.29,164.1) .. (534.08,165.67) .. controls (532.87,167.25) and (530.61,167.55) .. (529.04,166.34) .. controls (527.46,165.13) and (527.16,162.87) .. (528.37,161.29) -- cycle ;
+%Shape: Circle [id:dp7223599323923274] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (535.22,175.37) .. controls (536.43,173.79) and (538.69,173.49) .. (540.27,174.7) .. controls (541.85,175.91) and (542.14,178.17) .. (540.93,179.75) .. controls (539.72,181.33) and (537.46,181.62) .. (535.89,180.41) .. controls (534.31,179.2) and (534.01,176.94) .. (535.22,175.37) -- cycle ;
+%Shape: Circle [id:dp4917610865804143] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (503.48,151.03) .. controls (504.69,149.45) and (506.95,149.15) .. (508.53,150.36) .. controls (510.1,151.57) and (510.4,153.83) .. (509.19,155.41) .. controls (507.98,156.99) and (505.72,157.28) .. (504.14,156.07) .. controls (502.57,154.87) and (502.27,152.61) .. (503.48,151.03) -- cycle ;
+%Shape: Circle [id:dp46833320928578903] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (556.25,134.79) .. controls (557.46,133.21) and (559.72,132.91) .. (561.3,134.12) .. controls (562.88,135.33) and (563.18,137.59) .. (561.97,139.17) .. controls (560.76,140.75) and (558.5,141.05) .. (556.92,139.84) .. controls (555.34,138.63) and (555.04,136.37) .. (556.25,134.79) -- cycle ;
+%Shape: Circle [id:dp9976364730185965] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (566.65,172.5) .. controls (568,170.75) and (567.67,168.24) .. (565.91,166.89) .. controls (564.16,165.55) and (561.65,165.88) .. (560.3,167.63) .. controls (558.96,169.39) and (559.29,171.9) .. (561.04,173.24) .. controls (562.8,174.59) and (565.31,174.25) .. (566.65,172.5) -- cycle ;
+%Shape: Circle [id:dp729576813463166] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (572.39,159.76) .. controls (573.6,158.18) and (575.86,157.89) .. (577.44,159.1) .. controls (579.01,160.31) and (579.31,162.57) .. (578.1,164.14) .. controls (576.89,165.72) and (574.63,166.02) .. (573.05,164.81) .. controls (571.48,163.6) and (571.18,161.34) .. (572.39,159.76) -- cycle ;
+%Shape: Circle [id:dp3134901054621404] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (553.61,157.96) .. controls (554.82,156.38) and (557.08,156.09) .. (558.65,157.3) .. controls (560.23,158.51) and (560.53,160.77) .. (559.32,162.34) .. controls (558.11,163.92) and (555.85,164.22) .. (554.27,163.01) .. controls (552.7,161.8) and (552.4,159.54) .. (553.61,157.96) -- cycle ;
+%Shape: Circle [id:dp5782612456908583] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (518.82,137.59) .. controls (520.03,136.01) and (522.29,135.71) .. (523.87,136.92) .. controls (525.45,138.13) and (525.75,140.39) .. (524.54,141.97) .. controls (523.33,143.55) and (521.07,143.85) .. (519.49,142.64) .. controls (517.91,141.43) and (517.61,139.17) .. (518.82,137.59) -- cycle ;
+%Shape: Circle [id:dp8725074095779166] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (478.18,130.12) .. controls (479.39,128.54) and (481.65,128.24) .. (483.23,129.45) .. controls (484.8,130.66) and (485.1,132.92) .. (483.89,134.5) .. controls (482.68,136.08) and (480.42,136.37) .. (478.85,135.16) .. controls (477.27,133.95) and (476.97,131.69) .. (478.18,130.12) -- cycle ;
+%Shape: Circle [id:dp12239679349965205] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (481.88,158.16) .. controls (483.09,156.58) and (485.35,156.28) .. (486.93,157.49) .. controls (488.51,158.7) and (488.8,160.96) .. (487.59,162.54) .. controls (486.38,164.12) and (484.12,164.42) .. (482.55,163.21) .. controls (480.97,162) and (480.67,159.74) .. (481.88,158.16) -- cycle ;
+%Shape: Circle [id:dp8651564686581987] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (506.98,175.39) .. controls (508.19,173.81) and (510.45,173.51) .. (512.03,174.72) .. controls (513.6,175.93) and (513.9,178.19) .. (512.69,179.77) .. controls (511.48,181.35) and (509.22,181.64) .. (507.64,180.43) .. controls (506.07,179.22) and (505.77,176.96) .. (506.98,175.39) -- cycle ;
+%Shape: Circle [id:dp4577282362542846] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (467.9,156.01) .. controls (469.11,154.43) and (471.37,154.13) .. (472.95,155.34) .. controls (474.53,156.55) and (474.83,158.81) .. (473.62,160.39) .. controls (472.41,161.97) and (470.15,162.27) .. (468.57,161.06) .. controls (466.99,159.85) and (466.69,157.59) .. (467.9,156.01) -- cycle ;
+%Shape: Circle [id:dp11950844294074425] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (539.33,135.17) .. controls (540.54,133.59) and (542.8,133.29) .. (544.38,134.5) .. controls (545.95,135.71) and (546.25,137.97) .. (545.04,139.55) .. controls (543.83,141.13) and (541.57,141.43) .. (539.99,140.22) .. controls (538.42,139.01) and (538.12,136.75) .. (539.33,135.17) -- cycle ;
+%Shape: Circle [id:dp4381682709605158] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (566.79,148.66) .. controls (568,147.08) and (570.26,146.79) .. (571.83,148) .. controls (573.41,149.21) and (573.71,151.46) .. (572.5,153.04) .. controls (571.29,154.62) and (569.03,154.92) .. (567.45,153.71) .. controls (565.87,152.5) and (565.58,150.24) .. (566.79,148.66) -- cycle ;
+%Shape: Circle [id:dp7202979552591927] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (522.27,174.51) .. controls (523.48,172.93) and (525.74,172.63) .. (527.32,173.84) .. controls (528.89,175.05) and (529.19,177.31) .. (527.98,178.89) .. controls (526.77,180.47) and (524.51,180.77) .. (522.93,179.56) .. controls (521.36,178.35) and (521.06,176.09) .. (522.27,174.51) -- cycle ;
+%Shape: Circle [id:dp9742022713254901] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (507.46,122.83) .. controls (508.67,121.25) and (510.93,120.95) .. (512.51,122.16) .. controls (514.08,123.37) and (514.38,125.63) .. (513.17,127.21) .. controls (511.96,128.79) and (509.7,129.09) .. (508.12,127.88) .. controls (506.55,126.67) and (506.25,124.41) .. (507.46,122.83) -- cycle ;
+%Shape: Circle [id:dp07859475388372095] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (487.68,169.66) .. controls (488.89,168.08) and (491.15,167.78) .. (492.73,168.99) .. controls (494.3,170.2) and (494.6,172.46) .. (493.39,174.04) .. controls (492.18,175.62) and (489.92,175.92) .. (488.34,174.71) .. controls (486.77,173.5) and (486.47,171.24) .. (487.68,169.66) -- cycle ;
+%Shape: Circle [id:dp04507660582959239] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (584.93,149.97) .. controls (586.14,148.4) and (588.4,148.1) .. (589.98,149.31) .. controls (591.56,150.52) and (591.86,152.78) .. (590.65,154.36) .. controls (589.44,155.93) and (587.18,156.23) .. (585.6,155.02) .. controls (584.02,153.81) and (583.72,151.55) .. (584.93,149.97) -- cycle ;
+%Shape: Circle [id:dp34659142607712523] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (471.06,145.32) .. controls (472.27,143.74) and (474.53,143.45) .. (476.1,144.66) .. controls (477.68,145.87) and (477.98,148.13) .. (476.77,149.7) .. controls (475.56,151.28) and (473.3,151.58) .. (471.72,150.37) .. controls (470.15,149.16) and (469.85,146.9) .. (471.06,145.32) -- cycle ;
+%Shape: Circle [id:dp2833925156992081] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (474.76,173.36) .. controls (475.97,171.79) and (478.23,171.49) .. (479.81,172.7) .. controls (481.38,173.91) and (481.68,176.17) .. (480.47,177.74) .. controls (479.26,179.32) and (477,179.62) .. (475.42,178.41) .. controls (473.85,177.2) and (473.55,174.94) .. (474.76,173.36) -- cycle ;
+%Shape: Circle [id:dp04285801356330987] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (457.64,165.28) .. controls (458.85,163.7) and (461.11,163.4) .. (462.69,164.61) .. controls (464.27,165.82) and (464.57,168.08) .. (463.36,169.66) .. controls (462.15,171.24) and (459.89,171.54) .. (458.31,170.33) .. controls (456.73,169.12) and (456.43,166.86) .. (457.64,165.28) -- cycle ;
+%Shape: Circle [id:dp5376607685602927] 
+\draw  [color={rgb, 255:red, 74; green, 144; blue, 226 }  ,draw opacity=1 ][fill={rgb, 255:red, 80; green, 227; blue, 194 }  ,fill opacity=1 ] (453.13,147.33) .. controls (454.34,145.75) and (456.6,145.46) .. (458.18,146.67) .. controls (459.76,147.87) and (460.06,150.13) .. (458.85,151.71) .. controls (457.64,153.29) and (455.38,153.59) .. (453.8,152.38) .. controls (452.22,151.17) and (451.92,148.91) .. (453.13,147.33) -- cycle ;
+%Right Arrow [id:dp44647252301927964] 
+\draw   (254.2,148) -- (372.2,148) -- (372.2,138) -- (404.2,158) -- (372.2,178) -- (372.2,168) -- (254.2,168) -- cycle ;
+
+% Text Node
+\draw (223,104.5) node [color={rgb, 255:red, 233; green, 23; blue, 23 }  ,opacity=1 ]  {$PC1$};
+% Text Node
+\draw (89,107) node [color={rgb, 255:red, 233; green, 23; blue, 23 }  ,opacity=1 ]  {$PC2$};
+% Text Node
+\draw (626,167.5) node [color={rgb, 255:red, 233; green, 23; blue, 23 }  ,opacity=1 ]  {$PC1$};
+% Text Node
+\draw (500,77) node [color={rgb, 255:red, 233; green, 23; blue, 23 }  ,opacity=1 ]  {$PC2$};
+% Text Node
+\draw (316,132) node   {$Base\ transform$};
+
+\end{tikzpicture}
+    \centering
+    \caption{PCA on 2D data points}
+    \label{fig:pca}
+\end{figure}
+Important notes on PCA: \bluep{PCA will be applied to each dimension; each principal vector will be perpendicular to each other.}
+\subsubsection{A Python example}
+\hyperlink{https://github.com/Lonitch/Notes-on-MongoDB/blob/master/principal-component-analysis.ipynb}{github link}
+\subsection{Linear Regression with MongoDB}
+\hyperlink{https://github.com/Lonitch/Notes-on-MongoDB/blob/master/linear-regression-on-titanic-data-set.ipynb}{github link}
+\subsection{Decision tree with MongoDB+Python}
+\hyperlink{https://github.com/Lonitch/Notes-on-MongoDB/blob/master/Decision\%2BTree.ipynb}{github link}
+\subsection{K-mean with MongoDB+Python}
+\hyperlink{https://github.com/Lonitch/Notes-on-MongoDB/blob/master/kmeans.ipynb}{github link}
 
 
 \end{document}
